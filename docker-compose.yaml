@@ -1,0 +1,76 @@
+version: "3"
+
+networks:
+    web:
+      external: true
+
+services:
+  php:
+    build: ./php
+    container_name: website-php
+    restart: unless-stopped
+    networks:
+      - web
+    labels:
+      - traefik.enable=false
+    volumes:
+      - ./app/public/:/var/www/html/
+    expose:
+      - 9000
+    links:
+       - database
+    depends_on:
+      - database
+
+  nginx:
+    container_name: website-nginx
+    image: nginx:1.15.7
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.website.rule=Host(`website.localhost`)"
+      - "traefik.http.routers.website.entrypoints=web"
+    networks:
+      - web
+    depends_on:
+      - php
+      - database
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf
+      - ./app/public/:/var/www/html/
+
+  database:
+    container_name: website-database
+    image: mariadb:10.5.3
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: "$MYSQL_ROOT"
+      MYSQL_USER: "$MYSQL_USER"
+      MYSQL_PASSWORD: "$MYSQL_PASSWORD"
+      MYSQL_DATABASE: "$MYSQL_DATABASE"
+    networks:
+      - web
+    labels:
+      - traefik.enable=false
+
+  #composer:
+  #  build: ./composer
+
+  phpmyadmin:
+    container_name: website-phpmyadmin
+    image: phpmyadmin/phpmyadmin:5.0.2
+    restart: unless-stopped
+    depends_on:
+      - database
+    labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.pma.rule=Host(`pma.localhost`)"
+        - "traefik.http.routers.pma.entrypoints=web"
+    networks:
+      - web
+    environment:
+      - PMA_ARBITRARY=1
+      - PMA_HOST=database
+      - PMA_PORT=3306
+    volumes:
+      - /sessions
